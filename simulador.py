@@ -110,3 +110,4 @@ elif st.session_state["etapa"] == 6:
         st.experimental_rerun()  # 🔄 Refrescar la interfaz
 
 
+
