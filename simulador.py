@@ -3,111 +3,119 @@ import streamlit as st
 # Configuración de la página
 st.set_page_config(page_title="Simulador de Abastecimiento", layout="wide")
 
-# Inicializar variables de sesión
-if "puntaje" not in st.session_state:
-    st.session_state["puntaje"] = 0
-if "etapa" not in st.session_state:
-    st.session_state["etapa"] = 1
-if "categoria" not in st.session_state:  # Para almacenar la elección inicial
-    st.session_state["categoria"] = None
+# Inicializar variables de sesión de manera segura
+session_defaults = {
+    "puntaje": 0,
+    "etapa": 1,
+    "categoria": None,
+    "error_entrega": False,
+    "error_visual": False,
+    "monto_compra": None,
+    "proveedor_nuevo": False,
+}
+
+for key, value in session_defaults.items():
+    if key not in st.session_state:
+        st.session_state[key] = value
 
 # Función para avanzar de etapa con control de errores
-def avanzar(puntos, categoria=None):
-    if categoria:  # Guardar la elección inicial solo si aún no ha sido elegida
+def avanzar(puntos, categoria=None, error_entrega=False, error_visual=False, monto_compra=None, proveedor_nuevo=False):
+    if categoria:
         st.session_state["categoria"] = categoria
-    st.session_state["puntaje"] += puntos
-    st.session_state["etapa"] += 1
-    st.experimental_rerun()  # 🔄 Refrescar la interfaz
+    if monto_compra is not None:
+        st.session_state["monto_compra"] = monto_compra
+    if proveedor_nuevo:
+        st.session_state["proveedor_nuevo"] = True
+    if error_entrega:
+        st.session_state["error_entrega"] = True
+    if error_visual:
+        st.session_state["error_visual"] = True
+    else:
+        st.session_state["puntaje"] += puntos
+        st.session_state["etapa"] += 1
+        st.session_state["error_visual"] = False
+    st.experimental_rerun()
 
 # Título principal
 st.title("🛒 Simulador de Abastecimiento en SAP")
+st.write("Simula el proceso de abastecimiento, tomando decisiones correctas.")
 
-st.write("Bienvenido/a al simulador de abastecimiento. Debes tomar decisiones correctas para completar el proceso con éxito.")
+# Si hay error visual, mostrar mensaje de error
+if st.session_state["error_visual"]:
+    st.error("❌ Error en el procedimiento de abastecimiento.")
 
-# ETAPA 1: Detección de la Necesidad
+# Etapas del proceso
 if st.session_state["etapa"] == 1:
     st.subheader("📌 Etapa 1: Detección de la Necesidad")
-    st.write("Tu equipo necesita adquirir materiales para la oficina. ¿Qué tipo de bien o servicio necesitas?")
+    st.write("¿Qué tipo de bien o servicio necesitas adquirir?")
 
     if st.button("📄 Papelería"):
-        avanzar(10, categoria="Papelería")  # Avanza con la categoría correcta
-
+        avanzar(10, categoria="Papelería")
     if st.button("💻 Software"):
-        avanzar(10, categoria="Software")  # Flujo especial para software
-
+        avanzar(10, categoria="Software")
     if st.button("🛠️ Mantenimiento"):
-        avanzar(10, categoria="Mantenimiento")  # Flujo especial para mantenimiento
+        avanzar(10, categoria="Mantenimiento")
+    if st.button("🌍 Servicio Exterior"):
+        avanzar(10, categoria="Servicio Exterior")
 
-# ETAPA 2: Carga de Solicitud (cambia según la elección)
 elif st.session_state["etapa"] == 2:
-    if st.session_state["categoria"] == "Papelería":
-        st.subheader("📌 Etapa 2: Carga de Solicitud - Papelería")
-        st.write("¿Dónde quieres cargar la solicitud de pedido?")
-        if st.button("🖥️ SAP"):
-            avanzar(10)
-        if st.button("📋 Wrike"):
-            avanzar(7)
+    st.subheader("📌 Etapa 2: Carga de Solicitud")
+    monto = st.number_input("Ingresa el monto de la compra (sin IVA, en USD):", min_value=0.0, step=10.0)
 
-    elif st.session_state["categoria"] == "Software":
-        st.subheader("📌 Etapa 2: Carga de Solicitud - Software")
-        st.write("El software requiere una Orden de Compra. ¿Cómo procederás?")
-        if st.button("📝 Crear OC en SAP"):
-            avanzar(10)
-        if st.button("⚠️ No crear OC (incorrecto)"):
-            avanzar(-5)
+    if st.button("Continuar"):
+        if monto > 2000:
+            st.warning("💰 Las compras mayores a U$S 2,000 requieren Orden de Compra.")
+        avanzar(0, monto_compra=monto)
 
-    elif st.session_state["categoria"] == "Mantenimiento":
-        st.subheader("📌 Etapa 2: Carga de Solicitud - Mantenimiento")
-        st.write("Antes de proceder con el mantenimiento, se necesita una aprobación.")
-        if st.button("✅ Enviar solicitud de aprobación"):
-            avanzar(10)
-        if st.button("⚠️ Continuar sin aprobación (incorrecto)"):
-            avanzar(-5)
-
-# ETAPA 3: Selección del Proveedor (igual para todas las categorías)
 elif st.session_state["etapa"] == 3:
     st.subheader("📌 Etapa 3: Selección del Proveedor")
-    st.write("¿A qué proveedor eliges?")
+    st.write("Elige el proveedor:")
+
     if st.button("✅ Proveedor Sugerido"):
         avanzar(10)
-    if st.button("🆕 Nuevo Proveedor (no registrado)"):
-        avanzar(-5)
+    if st.button("🆕 Nuevo Proveedor"):
+        avanzar(-5, proveedor_nuevo=True, error_visual=True)
 
-# ETAPA 4: Recepción del Bien o Servicio
 elif st.session_state["etapa"] == 4:
     st.subheader("📌 Etapa 4: Recepción del Bien o Servicio")
-    st.write("El proveedor ha entregado el pedido. ¿Todo llegó correctamente?")
     if st.button("✔️ Sí, todo correcto"):
         avanzar(10)
     if st.button("❌ No, hay errores en la entrega"):
-        avanzar(-5)
+        st.error("❌ Debes gestionar la corrección del pedido.")
+        avanzar(-5, error_entrega=True, error_visual=True)
 
-# ETAPA 5: Autorización del Gasto
-elif st.session_state["etapa"] == 5:
+elif st.session_state["etapa"] == 5 and not st.session_state["error_entrega"]:
     st.subheader("📌 Etapa 5: Autorización del Gasto")
-    st.write("Debes autorizar el gasto. ¿Qué datos necesitas?")
     if st.button("📑 Orden de Compra, Importe, Fecha, Concepto"):
         avanzar(10)
     if st.button("📜 Solo Factura"):
-        avanzar(-5)
+        st.error("❌ Faltan datos para autorizar el gasto.")
+        avanzar(-5, error_visual=True)
 
-# ETAPA 6: Pago al Proveedor
-elif st.session_state["etapa"] == 6:
+elif st.session_state["etapa"] == 6 and not st.session_state["error_entrega"]:
     st.subheader("📌 Etapa 6: Pago al Proveedor")
-    st.write("El área de Administración ha procesado la factura y realizado el pago. ¡Misión cumplida!")
-
     st.write(f"Tu puntaje final es: **{st.session_state['puntaje']}** puntos")
 
     if st.session_state["puntaje"] >= 50:
         st.success("🎉 ¡Muy bien! Seguiste correctamente el proceso.")
     else:
-        st.warning("⚠️ Revisa las mejores prácticas del proceso de abastecimiento para optimizar tiempos.")
+        st.warning("⚠️ Revisa las mejores prácticas del proceso de abastecimiento.")
+
+    st.subheader("📢 Información Importante:")
+    st.info("📅 **Las facturas se registran con una semana de retraso.**")
+    st.info("💰 Para consultar fechas de pago, comunícate con el área de **Pagos**.")
 
     if st.button("🔄 Reiniciar Juego"):
-        st.session_state["puntaje"] = 0
-        st.session_state["etapa"] = 1
-        st.session_state["categoria"] = None
-        st.experimental_rerun()  # 🔄 Refrescar la interfaz
+        st.session_state.clear()
+        st.experimental_rerun()
+
+elif st.session_state["error_entrega"]:
+    st.subheader("🚨 Proceso Interrumpido")
+    st.error("❌ Error en la entrega. Debes corregirlo antes de continuar.")
+
+    if st.button("🔄 Reiniciar Juego"):
+        st.session_state.clear()
+        st.experimental_rerun()
 
 
 
